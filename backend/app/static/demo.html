@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IntentRec - AI Multi-Intent E-Commerce Engine</title>
+  <!-- React 18 & Babel CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #020617;
+      color: #f8fafc;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.6);
+      backdrop-filter: blur(12px);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #e879f9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .gradient-button {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: white;
+      transition: all 0.2s ease-in-out;
+    }
+    .gradient-button:hover {
+      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body class="min-h-screen selection:bg-indigo-500 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const API_BASE = 'http://localhost:8000/api/v1';
+
+    const INTENTS = [
+      { id: "budget", name: "Budget shopping", tag: "budget" },
+      { id: "urgent", name: "Urgent purchase", tag: "urgent" },
+      { id: "fashion", name: "Fashion matching", tag: "fashion" },
+      { id: "seasonal", name: "Seasonal shopping", tag: "seasonal" },
+      { id: "browse", name: "Casual browsing", tag: "browse" }
+    ];
+
+    const SAMPLE_IMAGES = [
+      { id: 'shoes', title: 'Running Shoes', url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=400&q=80' },
+      { id: 'headphones', title: 'Headphones', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80' },
+      { id: 'tshirt', title: 'Cotton Shirt', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80' },
+      { id: 'watch', title: 'Smart Watch', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80' },
+    ];
+
+    function App() {
+      const [activeIntent, setActiveIntent] = React.useState("Casual browsing");
+      const [products, setProducts] = React.useState([]);
+      const [categories, setCategories] = React.useState([]);
+      const [cart, setCart] = React.useState([]);
+      const [wishlist, setWishlist] = React.useState([]);
+      const [isCartOpen, setIsCartOpen] = React.useState(false);
+      const [isWishlistOpen, setIsWishlistOpen] = React.useState(false);
+      const [isVisualSearchOpen, setIsVisualSearchOpen] = React.useState(false);
+      const [selectedProduct, setSelectedProduct] = React.useState(null);
+      const [currentTab, setCurrentTab] = React.useState('home');
+      const [loading, setLoading] = React.useState(true);
+
+      // Visual Search State
+      const [visualResults, setVisualResults] = React.useState([]);
+      const [visualAnalyzing, setVisualAnalyzing] = React.useState(false);
+
+      React.useEffect(() => {
+        setLoading(true);
+        fetch(`${API_BASE}/recommendations?intent=${encodeURIComponent(activeIntent)}&limit=8`)
+          .then(res => res.json())
+          .then(data => {
+            setProducts(data);
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
+
+        fetch(`${API_BASE}/products/categories`)
+          .then(res => res.json())
+          .then(data => setCategories(data))
+          .catch(console.error);
+      }, [activeIntent]);
+
+      const addToCart = (product) => {
+        setCart(prev => {
+          const existing = prev.find(item => item.product.id === product.id);
+          if (existing) {
+            return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+          }
+          return [...prev, { product, quantity: 1 }];
+        });
+        setIsCartOpen(true);
+      };
+
+      const removeFromCart = (pid) => {
+        setCart(prev => prev.filter(item => item.product.id !== pid));
+      };
+
+      const toggleWishlist = (product) => {
+        setWishlist(prev => {
+          if (prev.some(p => p.id === product.id)) {
+            return prev.filter(p => p.id !== product.id);
+          }
+          return [...prev, product];
+        });
+      };
+
+      const handleVisualSearch = (imgUrl) => {
+        setVisualAnalyzing(true);
+        fetch(`${API_BASE}/recommendations/visual-search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_url: imgUrl })
+        })
+        .then(res => res.json())
+        .then(data => {
+          setVisualResults(data);
+          setVisualAnalyzing(false);
+        })
+        .catch(() => setVisualAnalyzing(false));
+      };
+
+      const cartTotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Header Navbar */}
+          <header className="sticky top-0 z-40 glass-panel border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentTab('home')}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-black text-xl shadow-lg shadow-indigo-500/30">
+                ⚡
+              </div>
+              <div>
+                <h1 className="text-xl font-bold gradient-text">IntentRec AI</h1>
+                <p className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Multi-Intent Engine</p>
+              </div>
+            </div>
+
+            {/* Navbar Controls */}
+            <div className="flex items-center gap-3">
+              {/* Intent Dropdown */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-xs text-indigo-300 font-semibold">
+                <span>✨ Intent:</span>
+                <select 
+                  value={activeIntent} 
+                  onChange={(e) => setActiveIntent(e.target.value)}
+                  className="bg-slate-900 text-indigo-300 font-bold focus:outline-none cursor-pointer rounded-lg px-2 py-1"
+                >
+                  {INTENTS.map(i => (
+                    <option key={i.id} value={i.name}>{i.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Visual Search Camera Button */}
+              <button 
+                onClick={() => setIsVisualSearchOpen(true)}
+                className="px-3 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 text-xs font-bold flex items-center gap-1.5"
+              >
+                📷 Visual Search
+              </button>
+
+              {/* Wishlist Button */}
+              <button 
+                onClick={() => setIsWishlistOpen(true)}
+                className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-rose-400"
+              >
+                ❤️ {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{wishlist.length}</span>}
+              </button>
+
+              {/* Cart Button */}
+              <button 
+                onClick={() => setIsCartOpen(true)}
+                className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-indigo-400"
+              >
+                🛒 {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
+              </button>
+            </div>
+          </header>
+
+          {/* Main Body */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 space-y-10">
+            {/* Hero Banner */}
+            <section className="glass-panel p-8 sm:p-12 rounded-3xl border border-white/10 relative overflow-hidden">
+              <div className="max-w-2xl space-y-4">
+                <span className="inline-block px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-bold">
+                  ⚡ AI Intent Personalization Active
+                </span>
+                <h2 className="text-4xl font-extrabold text-white leading-tight">
+                  Shop By <span className="gradient-text">Active Intent</span>, Not Static Search
+                </h2>
+                <p className="text-slate-300 text-sm leading-relaxed">
+                  Our hybrid recommendation engine combines vector embeddings, collaborative user affinity, and real-time session intent filters to surface the most relevant products instantly.
+                </p>
+
+                {/* Intent Selector Quick Chips */}
+                <div className="pt-2 flex flex-wrap gap-2">
+                  {INTENTS.map(i => (
+                    <button
+                      key={i.id}
+                      onClick={() => setActiveIntent(i.name)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        activeIntent === i.name 
+                          ? 'gradient-button border-indigo-400 shadow-lg' 
+                          : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-indigo-500/40'
+                      }`}
+                    >
+                      {i.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* Categories */}
+            <section className="space-y-4">
+              <h3 className="text-xl font-bold text-white">Explore Categories</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                {categories.map(c => (
+                  <div key={c.category} className="glass-card p-4 rounded-2xl border border-slate-800 text-center flex flex-col items-center gap-2 hover:border-indigo-500/40 transition-colors">
+                    <img src={c.image_url} alt={c.category} className="w-14 h-14 rounded-xl object-cover" />
+                    <h4 className="text-xs font-bold text-white">{c.category}</h4>
+                    <span className="text-[10px] text-slate-400">{c.count} Items</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* AI Recommendations Grid */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Recommendations for <span className="gradient-text">{activeIntent}</span></h3>
+                  <p className="text-xs text-slate-400">Powered by FastAPI, PyTorch Vector Embeddings & Hybrid Scoring</p>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-12 text-slate-500 text-sm">Loading AI Recommendations...</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                  {products.map(product => (
+                    <div key={product.id} className="glass-card p-4 rounded-2xl border border-slate-800 hover:border-indigo-500/40 transition-all flex flex-col justify-between group">
+                      <div>
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-900 mb-3">
+                          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          {product.express_delivery && (
+                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-emerald-500/90 text-slate-950 text-[10px] font-extrabold">
+                              ⚡ 24h Express
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-bold text-white line-clamp-1">{product.name}</h4>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-sm font-black text-indigo-300">₹{product.price.toLocaleString()}</span>
+                          <span className="text-xs text-amber-400 font-bold">⭐ {product.rating}</span>
+                        </div>
+                        <div className="mt-2 p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-slate-300">
+                          <span className="font-bold text-indigo-400 block mb-0.5">XAI Match Reasoning:</span>
+                          {product.explanation}
+                        </div>
+                      </div>
+
+                      <div className="pt-4 flex items-center gap-2">
+                        <button 
+                          onClick={() => addToCart(product)}
+                          className="flex-1 gradient-button py-2 rounded-xl text-xs font-bold"
+                        >
+                          Add to Cart
+                        </button>
+                        <button 
+                          onClick={() => toggleWishlist(product)}
+                          className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-rose-400"
+                        >
+                          ❤️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
+
+          {/* Cart Drawer */}
+          {isCartOpen && (
+            <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/80 backdrop-blur-sm">
+              <div className="w-full max-w-md glass-panel h-full p-6 flex flex-col justify-between border-l border-slate-800">
+                <div>
+                  <div className="flex justify-between items-center pb-4 border-b border-slate-800">
+                    <h3 className="text-lg font-bold text-white">Your Cart ({cart.length})</h3>
+                    <button onClick={() => setIsCartOpen(false)} className="text-slate-400 hover:text-white text-lg">✕</button>
+                  </div>
+                  <div className="space-y-3 mt-4 max-h-[60vh] overflow-y-auto">
+                    {cart.length === 0 ? (
+                      <p className="text-slate-500 text-xs text-center py-8">Your cart is empty.</p>
+                    ) : (
+                      cart.map(({ product, quantity }) => (
+                        <div key={product.id} className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex justify-between items-center">
+                          <div>
+                            <h5 className="text-xs font-bold text-white">{product.name}</h5>
+                            <span className="text-xs text-indigo-400 font-semibold">₹{product.price} x {quantity}</span>
+                          </div>
+                          <button onClick={() => removeFromCart(product.id)} className="text-slate-500 hover:text-rose-400 text-xs">Remove</button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                {cart.length > 0 && (
+                  <div className="pt-4 border-t border-slate-800 space-y-3">
+                    <div className="flex justify-between font-bold text-white">
+                      <span>Total Amount:</span>
+                      <span className="text-indigo-400">₹{cartTotal.toLocaleString()}</span>
+                    </div>
+                    <button onClick={() => alert("Simulating Instant AI Checkout...")} className="w-full gradient-button py-3 rounded-xl font-bold text-xs">
+                      Proceed to Checkout
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Visual Search Modal */}
+          {isVisualSearchOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+              <div className="w-full max-w-xl glass-panel p-6 rounded-3xl border border-white/10 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-white">📷 AI Visual Search</h3>
+                  <button onClick={() => setIsVisualSearchOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <p className="text-xs text-slate-400">Pick a sample photo to run CNN visual feature vector matching:</p>
+                <div className="grid grid-cols-4 gap-3">
+                  {SAMPLE_IMAGES.map(s => (
+                    <button 
+                      key={s.id}
+                      onClick={() => handleVisualSearch(s.url)}
+                      className="aspect-square rounded-xl overflow-hidden border border-slate-800 hover:border-indigo-500 relative group"
+                    >
+                      <img src={s.url} alt={s.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[10px] text-white p-1 text-center font-bold">{s.title}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {visualAnalyzing && (
+                  <div className="p-4 rounded-xl bg-indigo-500/10 text-indigo-300 text-xs text-center">
+                    Extracting CNN feature vectors & computing cosine similarity...
+                  </div>
+                )}
+
+                {!visualAnalyzing && visualResults.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-xs font-bold text-white">Visual Similarity Matches ({visualResults.length}):</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-48 overflow-y-auto">
+                      {visualResults.map(prod => (
+                        <div key={prod.id} className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                          <img src={prod.image_url} alt={prod.name} className="w-full h-16 object-cover rounded-lg mb-1" />
+                          <h6 className="text-[10px] font-bold text-white truncate">{prod.name}</h6>
+                          <span className="text-[10px] text-indigo-400 font-extrabold">{Math.round(prod.visual_match_score * 100)}% MATCH</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
