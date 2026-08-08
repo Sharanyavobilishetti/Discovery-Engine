@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+ENV/
+env/
+*.sqlite3
+findora.db
+
+# Node.js
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Environment variables & Logs
+.env
+*.log
+
+# IDE & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
